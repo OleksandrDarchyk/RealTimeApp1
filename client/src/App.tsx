@@ -1,35 +1,105 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
+
 import './App.css'
+import {useStream} from "./useStream.tsx";
+import {useEffect} from "react";
+import { API_BASE_URL } from "./config";
+
+
+
+
 
 function App() {
-  const [count, setCount] = useState(0)
 
-  return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+    const stream = useStream();
+
+
+
+    useEffect(() => {
+        // 1) Regular room messages (chat messages)
+        const offMsg = stream.on<{ message: string; from?: string }>(
+            "room1",
+            "messageHasBeenReceived",
+            (dto) => {
+                console.log("MSG:", dto.message, dto.from);
+            }
+        );
+
+        // 2) System messages (join/leave/disconnect notifications)
+        const offSystem = stream.on<{ message: string; kind: string }>(
+            "room1",
+            "SystemMessage",
+            (dto) => {
+                console.log("SYSTEM:", dto.kind, dto.message);
+            }
+        );
+
+        // 3) Direct messages (e.g., poke) - requires server to map null-group to "direct"
+        const offPoke = stream.on<{ message: string }>(
+            "direct",
+            "PokeResponse",
+            (dto) => {
+                alert(dto.message);
+            }
+        );
+
+        // Cleanup subscriptions when the component unmounts
+        return () => {
+            offMsg();
+            offSystem();
+            offPoke();
+        };
+    }, []);
+
+
+
+    return (
+        <>
+
+            <button onClick={() => {
+                fetch(`${API_BASE_URL}/rooms/room1/join`,{
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({connectionId: stream.connectionId}),
+
+                })
+
+            }}>JOIN ROOM</button>
+
+            <button onClick={() => {
+
+                fetch(`${API_BASE_URL}/rooms/room1/leave`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ connectionId: stream.connectionId }),
+                });
+            }}>LEAVE ROOM</button>
+
+            <button onClick={() => {
+                fetch(`${API_BASE_URL}/rooms/room1/messages`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content:'hello', from:'me' }),
+                });
+            }}>SEND MESSAGE ROOM</button>
+
+            <button onClick={async () => {
+                const target = prompt("Target connectionId?");
+                if (!target) return;
+
+                const res = await fetch(`${API_BASE_URL}/poke`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ targetConnectionId: target }),
+                });
+
+                console.log("POKE status:", res.status);
+            }}>
+                POKE
+            </button>
+
+        </>
+    )
 }
 
 export default App
+//

@@ -6,14 +6,14 @@ using StateleSSE.AspNetCore.Extensions;
 
 
 var builder = WebApplication.CreateBuilder(args);
-
-builder.Services.AddSingleton<AppOptions>(provider =>
-{
-    var configuration = provider.GetRequiredService<IConfiguration>();
-    var appOptions = new AppOptions();
-    configuration.GetSection(nameof(AppOptions)).Bind(appOptions);
-    return appOptions;
-});
+// Render multiplexer start again after test local
+// builder.Services.AddSingleton<AppOptions>(provider =>
+// {
+//     var configuration = provider.GetRequiredService<IConfiguration>();
+//     var appOptions = new AppOptions();
+//     configuration.GetSection(nameof(AppOptions)).Bind(appOptions);
+//     return appOptions;
+// });
 
 builder.Services.Configure<HostOptions>(options =>
 {
@@ -28,15 +28,17 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
     config.AbortOnConnectFail = false;
     return ConnectionMultiplexer.Connect(config);
 });
-builder.Services.AddRedisSseBackplane();
+//start again after test local
+// builder.Services.AddRedisSseBackplane();
 
 
 
-//Local Radis backplane
-// builder.Services.AddRedisSseBackplane(conf =>
-// {
-//     conf.RedisConnectionString = "localhost:6379";
-// });
+// Local Radis backplane
+builder.Services.AddRedisSseBackplane(conf =>
+{
+    conf.RedisConnectionString = "localhost:6379,abortConnect=false";
+});
+
 builder.Services.AddControllers();
 builder.Services.AddCors();
 builder.Services.AddOpenApiDocument();

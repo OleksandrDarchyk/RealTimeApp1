@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-dotnet ef migrations add InitialCreate \
+dotnet ef migrations add addUserAuth \
   --project ./dataccess.csproj \
   --startup-project ../api/api.csproj \
   --context ChatDbContext \

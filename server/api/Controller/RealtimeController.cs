@@ -1,7 +1,9 @@
+using System.Security.Claims;
 using System.Text.Json;
 using api.dto;
 using dataccess;
 using dataccess.Entities;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using StateleSSE.AspNetCore;
@@ -69,7 +71,8 @@ public class RealtimeController(ISseBackplane backplane, ChatDbContext ctx) : Co
 
         return NoContent();
     }
-
+    
+    [Authorize]
     [HttpPost("rooms/{roomId}/messages")]
     public async Task<IActionResult> SendMessage([FromRoute] string roomId, [FromBody] SendMessageRequest req)
     {
@@ -77,13 +80,23 @@ public class RealtimeController(ISseBackplane backplane, ChatDbContext ctx) : Co
         if (!roomExists)
             return BadRequest($"Room '{roomId}' does not exist");
 
+        // Get userId from JWT (NameIdentifier claim)
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(userId))
+            return Unauthorized();
+
+        // Resolve nickname from DB
+        var user = await ctx.Users.FirstOrDefaultAsync(u => u.Id == userId, HttpContext.RequestAborted);
+        if (user is null) return Unauthorized();
+        var nickname = user.Nickname;
+
         // 1) Persist the message in the database
         var msg = new Message
         {
             Id = Guid.NewGuid(),
             RoomId = roomId,
             Content = req.Content,
-            From = req.From,
+            From = nickname,
             CreatedAt = DateTimeOffset.UtcNow
         };
 
@@ -94,12 +107,13 @@ public class RealtimeController(ISseBackplane backplane, ChatDbContext ctx) : Co
         await backplane.Clients.SendToGroupAsync(roomId, new
         {
             message = req.Content,
-            from = req.From,
+            from = nickname,
             eventType = "messageHasBeenReceived"
         });
 
         return NoContent();
     }
+
 
     [HttpGet("rooms/{roomId}/messages")]
     public async Task<IActionResult> GetMessages([FromRoute] string roomId, [FromQuery] int limit = 5)
@@ -126,7 +140,8 @@ public class RealtimeController(ISseBackplane backplane, ChatDbContext ctx) : Co
 
         return Ok(last);
     }
-
+    
+    [Authorize]
     [HttpPost("poke")]
     public async Task<IActionResult> Poke([FromBody] PokeRequest req)
     {

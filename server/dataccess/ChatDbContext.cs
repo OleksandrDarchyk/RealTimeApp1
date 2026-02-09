@@ -9,6 +9,7 @@ public class ChatDbContext : DbContext
 
     public DbSet<Room> Rooms => Set<Room>();
     public DbSet<Message> Messages => Set<Message>();
+    public DbSet<User> Users => Set<User>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -26,6 +27,39 @@ public class ChatDbContext : DbContext
             entity.Property(r => r.CreatedAt)
                 .HasColumnName("created_at")
                 .HasDefaultValueSql("NOW()");
+        });
+
+        // ----- Users -----
+        modelBuilder.Entity<User>(entity =>
+        {
+            entity.ToTable("users");
+
+            entity.HasKey(u => u.Id);
+
+            entity.Property(u => u.Id)
+                .HasColumnName("id")
+                .IsRequired();
+
+            entity.Property(u => u.Nickname)
+                .HasColumnName("nickname")
+                .IsRequired();
+
+            entity.Property(u => u.Hash)
+                .HasColumnName("hash")
+                .IsRequired();
+
+            entity.Property(u => u.Salt)
+                .HasColumnName("salt")
+                .IsRequired();
+
+            entity.Property(u => u.Role)
+                .HasColumnName("role")
+                .IsRequired();
+
+            // Unique username
+            entity.HasIndex(u => u.Nickname)
+                .IsUnique()
+                .HasDatabaseName("ux_users_nickname");
         });
 
         // ----- Messages -----

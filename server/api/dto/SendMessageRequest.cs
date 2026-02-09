@@ -1,3 +1,3 @@
 namespace api.dto;
 
-public record SendMessageRequest(string Content, string? From);
+public record SendMessageRequest(string Content);

@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json;
 using api;
 using dataccess;
 using Microsoft.EntityFrameworkCore;
@@ -18,6 +19,8 @@ builder.Services.AddSingleton<AppOptions>(sp =>
     configuration.GetSection(nameof(AppOptions)).Bind(options);
     return options;
 });
+
+
 
 // =========================
 // Fast shutdown (important for SSE)
@@ -61,7 +64,12 @@ builder.Services.AddRedisSseBackplane();
 // =========================
 // ASP.NET basics
 // =========================
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(o =>
+    {
+        o.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+        o.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
+    });
 builder.Services.AddCors();
 builder.Services.AddOpenApiDocument();
 
@@ -87,7 +95,20 @@ app.UseCors(c =>
 app.UseOpenApi();
 app.UseSwaggerUi();
 
+
+
 app.MapControllers();
+
+if (app.Environment.IsDevelopment())
+{
+    app.GenerateApiClientsFromOpenApi(
+        "../../client/src/generated-ts-client.ts"
+        ,
+        "../../client/openapi.json"
+
+    ).GetAwaiter().GetResult();
+}
+
 
 // =========================
 // SSE disconnect handling

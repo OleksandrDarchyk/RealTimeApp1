@@ -1,70 +1,103 @@
+using System.ComponentModel.DataAnnotations;
 using api;
+using dataccess;
+using Microsoft.EntityFrameworkCore;
 using StackExchange.Redis;
 using StateleSSE.AspNetCore;
 using StateleSSE.AspNetCore.Extensions;
 
-
-
 var builder = WebApplication.CreateBuilder(args);
-// Render multiplexer start again after test local
-// builder.Services.AddSingleton<AppOptions>(provider =>
-// {
-//     var configuration = provider.GetRequiredService<IConfiguration>();
-//     var appOptions = new AppOptions();
-//     configuration.GetSection(nameof(AppOptions)).Bind(appOptions);
-//     return appOptions;
-// });
 
+// =========================
+// AppOptions
+// =========================
+builder.Services.AddSingleton<AppOptions>(sp =>
+{
+    var configuration = sp.GetRequiredService<IConfiguration>();
+    var options = new AppOptions();
+    configuration.GetSection(nameof(AppOptions)).Bind(options);
+    return options;
+});
+
+// =========================
+// Fast shutdown (important for SSE)
+// =========================
 builder.Services.Configure<HostOptions>(options =>
 {
     options.ShutdownTimeout = TimeSpan.FromSeconds(0);
 });
+
+// =========================
+// Database (Postgres via EF Core)
+// =========================
+builder.Services.AddDbContext<ChatDbContext>((sp, opt) =>
+{
+    var appOptions = sp.GetRequiredService<AppOptions>();
+
+    if (string.IsNullOrWhiteSpace(appOptions.DbConnectionString))
+        throw new InvalidOperationException("AppOptions:DbConnectionString is missing");
+
+    opt.UseNpgsql(appOptions.DbConnectionString);
+});
+
+// =========================
+// Redis (StackExchange.Redis) + StateleSSE backplane
+// =========================
 builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
 {
     var appOptions = sp.GetRequiredService<AppOptions>();
-            
-    var config = ConfigurationOptions.Parse(appOptions.RenderConnectionString);
-    
+
+    if (string.IsNullOrWhiteSpace(appOptions.RedisConnectionString))
+        throw new InvalidOperationException("AppOptions:RedisConnectionString is missing");
+
+    var config = ConfigurationOptions.Parse(appOptions.RedisConnectionString);
     config.AbortOnConnectFail = false;
+
     return ConnectionMultiplexer.Connect(config);
 });
-//start again after test local
-// builder.Services.AddRedisSseBackplane();
 
+builder.Services.AddRedisSseBackplane();
 
-
-// Local Radis backplane
-builder.Services.AddRedisSseBackplane(conf =>
-{
-    conf.RedisConnectionString = "localhost:6379,abortConnect=false";
-});
-
+// =========================
+// ASP.NET basics
+// =========================
 builder.Services.AddControllers();
 builder.Services.AddCors();
 builder.Services.AddOpenApiDocument();
 
 var app = builder.Build();
 
+// =========================
+// Validate AppOptions early (clear errors on Fly/local)
+// =========================
+var opts = app.Services.GetRequiredService<AppOptions>();
+Validator.ValidateObject(opts, new ValidationContext(opts), validateAllProperties: true);
+
+// =========================
+// Middleware pipeline
+// =========================
 app.UseRouting();
 
-app.UseCors(conf =>
-    conf.AllowAnyHeader()
-        .AllowAnyMethod()
-        .AllowAnyOrigin()
-        .SetIsOriginAllowed(_ => true));
+app.UseCors(c =>
+    c.AllowAnyHeader()
+     .AllowAnyMethod()
+     .AllowAnyOrigin()
+     .SetIsOriginAllowed(_ => true));
 
 app.UseOpenApi();
 app.UseSwaggerUi();
 
 app.MapControllers();
 
-var bp = app.Services.GetRequiredService<ISseBackplane>();
-
-bp.OnClientDisconnected += async (_, e) =>
+// =========================
+// SSE disconnect handling
+// =========================
+var backplane = app.Services.GetRequiredService<ISseBackplane>();
+backplane.OnClientDisconnected += async (_, e) =>
 {
     foreach (var group in e.Groups)
     {
-        await bp.Clients.SendToGroupAsync(group, new
+        await backplane.Clients.SendToGroupAsync(group, new
         {
             eventType = "SystemMessage",
             message = "someone disconnected",
@@ -72,6 +105,5 @@ bp.OnClientDisconnected += async (_, e) =>
         });
     }
 };
-
 
 app.Run();

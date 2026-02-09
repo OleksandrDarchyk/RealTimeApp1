@@ -1,12 +1,15 @@
 using System.Text.Json;
 using api.dto;
+using dataccess;
+using dataccess.Entities;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using StateleSSE.AspNetCore;
 
 
 [ApiController]
 [Route("")]
-public class RealtimeController(ISseBackplane backplane) : ControllerBase
+public class RealtimeController(ISseBackplane backplane ,ChatDbContext ctx) : ControllerBase
 {
     [HttpGet("connect")]
     public async Task Connect()
@@ -35,6 +38,10 @@ public class RealtimeController(ISseBackplane backplane) : ControllerBase
     [HttpPost("rooms/{roomId}/join")]
     public async Task<IActionResult> JoinRoom([FromRoute] string roomId, [FromBody] ConnectionRequest req)
     {
+        var roomExists = await ctx.Rooms.AnyAsync(r => r.Id == roomId, HttpContext.RequestAborted);
+        if (!roomExists)
+            return BadRequest($"Room '{roomId}' does not exist");
+
         // 1) give a message who in a room
         await backplane.Clients.SendToGroupAsync(roomId, new
         {
@@ -57,6 +64,24 @@ public class RealtimeController(ISseBackplane backplane) : ControllerBase
     [HttpPost("rooms/{roomId}/messages")]
     public async Task<IActionResult> SendMessage([FromRoute] string roomId, [FromBody] SendMessageRequest req)
     {
+        var roomExists = await ctx.Rooms.AnyAsync(r => r.Id == roomId, HttpContext.RequestAborted);
+        if (!roomExists)
+            return BadRequest($"Room '{roomId}' does not exist");
+
+        // 1) Create and save message in DB
+        var msg = new Message
+        {
+            Id = Guid.NewGuid(),
+            RoomId = roomId,
+            Content = req.Content,
+            From = req.From,
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+
+        ctx.Messages.Add(msg);
+        await ctx.SaveChangesAsync(HttpContext.RequestAborted);
+
+        // 2) Then broadcast
         await backplane.Clients.SendToGroupAsync(roomId, new
         {
             message = req.Content,
@@ -66,7 +91,7 @@ public class RealtimeController(ISseBackplane backplane) : ControllerBase
 
         return NoContent();
     }
-    
+
     [HttpPost("poke")]
     public async Task<IActionResult> Poke([FromBody] PokeRequest req)
     {
@@ -93,38 +118,22 @@ public class RealtimeController(ISseBackplane backplane) : ControllerBase
 
         return NoContent();
     }
-
-
-
-
-    // [HttpPost("join")]
-    // public async Task Join(string connectionId, string room)
-    //     => await backplane.Groups.AddToGroupAsync(connectionId, room);
-    //
-    
-    //Potentially useful for testing, but not needed for the actual app since clients will send messages directly to groups instead of the server sending them to groups.
-    // [HttpPost("send")]
-    // public async Task Send(string room, string message)
-    //     => await backplane.Clients.SendToGroupAsync(room, new
-    //     {
-    //         message ,
-    //         eventType = "messageHasBeenReceived"
-    //     });
-    //
     
     
-    // [HttpPost("rooms/{roomId}/join")]
-    // public async Task<IActionResult> JoinRoom([FromRoute] string roomId, [FromBody] ConnectionRequest req)
-    // {
-    //     await backplane.Groups.AddToGroupAsync(req.ConnectionId, roomId);
-    //     return NoContent();
-    // }
-    //
-    
-    // [HttpPost("rooms/{roomId}/leave")]
-    // public async Task<IActionResult> LeaveRoom([FromRoute] string roomId, [FromBody] ConnectionRequest req)
-    // {
-    //     await backplane.Groups.RemoveFromGroupAsync(req.ConnectionId, roomId);
-    //     return NoContent();
-    // }
+    [HttpPost("CreateRooms")]
+    public async Task<IActionResult> CreateRoom([FromBody] CreateRoomRequest req)
+    {
+        var exists = await ctx.Rooms.AnyAsync(r => r.Id == req.RoomId, HttpContext.RequestAborted);
+        if (exists) return Conflict($"Room '{req.RoomId}' already exists");
+
+        ctx.Rooms.Add(new dataccess.Entities.Room
+        {
+            Id = req.RoomId,
+            CreatedAt = DateTimeOffset.UtcNow
+        });
+
+        await ctx.SaveChangesAsync(HttpContext.RequestAborted);
+        return NoContent();
+    }
+
 }

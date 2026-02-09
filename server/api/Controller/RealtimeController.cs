@@ -6,10 +6,9 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using StateleSSE.AspNetCore;
 
-
 [ApiController]
 [Route("")]
-public class RealtimeController(ISseBackplane backplane ,ChatDbContext ctx) : ControllerBase
+public class RealtimeController(ISseBackplane backplane, ChatDbContext ctx) : ControllerBase
 {
     [HttpGet("connect")]
     public async Task Connect()
@@ -42,7 +41,7 @@ public class RealtimeController(ISseBackplane backplane ,ChatDbContext ctx) : Co
         if (!roomExists)
             return BadRequest($"Room '{roomId}' does not exist");
 
-        // 1) give a message who in a room
+        // 1) Notify the room that someone joined
         await backplane.Clients.SendToGroupAsync(roomId, new
         {
             eventType = "SystemMessage",
@@ -50,17 +49,27 @@ public class RealtimeController(ISseBackplane backplane ,ChatDbContext ctx) : Co
             kind = "join"
         });
 
-        // 2) add new client to the group
+        // 2) Add the client connection to the room group
         await backplane.Groups.AddToGroupAsync(req.ConnectionId, roomId);
+
+        var last = await ctx.Messages
+            .Where(m => m.RoomId == roomId)
+            .OrderByDescending(m => m.CreatedAt)
+            .Take(5)
+            .Select(m => new MessageDto(m.Id, m.Content, m.From, m.CreatedAt))
+            .ToListAsync(HttpContext.RequestAborted);
+
+        last.Reverse();
+
+        // Send room history only to the joining client (direct message; evt.Group is null -> mapped to "direct" in /connect)
+        await backplane.Clients.SendToClientAsync(
+            req.ConnectionId,
+            new RoomHistoryResponse(roomId, last)
+        );
 
         return NoContent();
     }
 
-
- 
-   
-    
-    
     [HttpPost("rooms/{roomId}/messages")]
     public async Task<IActionResult> SendMessage([FromRoute] string roomId, [FromBody] SendMessageRequest req)
     {
@@ -68,7 +77,7 @@ public class RealtimeController(ISseBackplane backplane ,ChatDbContext ctx) : Co
         if (!roomExists)
             return BadRequest($"Room '{roomId}' does not exist");
 
-        // 1) Create and save message in DB
+        // 1) Persist the message in the database
         var msg = new Message
         {
             Id = Guid.NewGuid(),
@@ -81,7 +90,7 @@ public class RealtimeController(ISseBackplane backplane ,ChatDbContext ctx) : Co
         ctx.Messages.Add(msg);
         await ctx.SaveChangesAsync(HttpContext.RequestAborted);
 
-        // 2) Then broadcast
+        // 2) Broadcast the message to the room
         await backplane.Clients.SendToGroupAsync(roomId, new
         {
             message = req.Content,
@@ -90,6 +99,32 @@ public class RealtimeController(ISseBackplane backplane ,ChatDbContext ctx) : Co
         });
 
         return NoContent();
+    }
+
+    [HttpGet("rooms/{roomId}/messages")]
+    public async Task<IActionResult> GetMessages([FromRoute] string roomId, [FromQuery] int limit = 5)
+    {
+        // 1) Protect against invalid limit values
+        if (limit < 1) limit = 1;
+        if (limit > 50) limit = 50;
+
+        // 2) Room must exist
+        var roomExists = await ctx.Rooms.AnyAsync(r => r.Id == roomId, HttpContext.RequestAborted);
+        if (!roomExists)
+            return BadRequest($"Room '{roomId}' does not exist");
+
+        // 3) Read last N messages (descending) and map to DTO
+        var last = await ctx.Messages
+            .Where(m => m.RoomId == roomId)
+            .OrderByDescending(m => m.CreatedAt)
+            .Take(limit)
+            .Select(m => new MessageDto(m.Id, m.Content, m.From, m.CreatedAt))
+            .ToListAsync(HttpContext.RequestAborted);
+
+        // 4) Reverse so UI can render oldest -> newest
+        last.Reverse();
+
+        return Ok(last);
     }
 
     [HttpPost("poke")]
@@ -103,7 +138,7 @@ public class RealtimeController(ISseBackplane backplane ,ChatDbContext ctx) : Co
 
         return NoContent();
     }
-    
+
     [HttpPost("rooms/{roomId}/leave")]
     public async Task<IActionResult> LeaveRoom([FromRoute] string roomId, [FromBody] ConnectionRequest req)
     {
@@ -118,8 +153,7 @@ public class RealtimeController(ISseBackplane backplane ,ChatDbContext ctx) : Co
 
         return NoContent();
     }
-    
-    
+
     [HttpPost("CreateRooms")]
     public async Task<IActionResult> CreateRoom([FromBody] CreateRoomRequest req)
     {
@@ -135,5 +169,4 @@ public class RealtimeController(ISseBackplane backplane ,ChatDbContext ctx) : Co
         await ctx.SaveChangesAsync(HttpContext.RequestAborted);
         return NoContent();
     }
-
 }

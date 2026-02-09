@@ -91,7 +91,7 @@ app.MapControllers();
 
 // =========================
 // SSE disconnect handling
-// =========================
+// ==========================
 var backplane = app.Services.GetRequiredService<ISseBackplane>();
 backplane.OnClientDisconnected += async (_, e) =>
 {

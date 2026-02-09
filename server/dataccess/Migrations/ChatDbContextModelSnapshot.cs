@@ -74,6 +74,41 @@ namespace dataccess.Migrations
                     b.ToTable("rooms", (string)null);
                 });
 
+            modelBuilder.Entity("dataccess.Entities.User", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("text")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Hash")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("hash");
+
+                    b.Property<string>("Nickname")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("nickname");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("role");
+
+                    b.Property<string>("Salt")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("salt");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Nickname")
+                        .IsUnique()
+                        .HasDatabaseName("ux_users_nickname");
+
+                    b.ToTable("users", (string)null);
+                });
+
             modelBuilder.Entity("dataccess.Entities.Message", b =>
                 {
                     b.HasOne("dataccess.Entities.Room", "Room")

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
 import Login from "./Login";
 import type { RoomDto } from "../generated-ts-client";
 import { realtimeClient } from "../clients";
@@ -8,12 +9,14 @@ export default function RoomsPage() {
     const [rooms, setRooms] = useState<RoomDto[]>([]);
     const [roomId, setRoomId] = useState("room1");
     const [loading, setLoading] = useState(true);
+    const [creating, setCreating] = useState(false);
     const navigate = useNavigate();
 
     useEffect(() => {
         realtimeClient
             .getRooms()
             .then(setRooms)
+            .catch((e: any) => toast.error(e?.message ?? "Failed to load rooms"))
             .finally(() => setLoading(false));
     }, []);
 
@@ -45,17 +48,35 @@ export default function RoomsPage() {
                                         value={roomId}
                                         onChange={(e) => setRoomId(e.target.value)}
                                         placeholder="room id (e.g. room1)"
+                                        disabled={creating}
                                     />
                                     <button
                                         className="btn btn-primary"
+                                        disabled={creating}
                                         onClick={async () => {
                                             if (!roomId.trim()) return;
-                                            await realtimeClient.createRoom({ roomId });
-                                            const r = await realtimeClient.getRooms();
-                                            setRooms(r);
+
+                                            setCreating(true);
+                                            try {
+                                                await realtimeClient.createRoom({ roomId });
+                                                toast.success("Room created");
+                                                const r = await realtimeClient.getRooms();
+                                                setRooms(r);
+                                            } catch (e: any) {
+                                                toast.error(e?.message ?? "Failed to create room");
+                                            } finally {
+                                                setCreating(false);
+                                            }
                                         }}
                                     >
-                                        Create
+                                        {creating ? (
+                                            <>
+                                                <span className="loading loading-spinner loading-sm"></span>
+                                                Create
+                                            </>
+                                        ) : (
+                                            "Create"
+                                        )}
                                     </button>
                                 </div>
                                 <div className="text-xs opacity-70 mt-2">

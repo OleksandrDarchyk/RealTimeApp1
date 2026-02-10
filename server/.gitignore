@@ -6,7 +6,7 @@
 # dotenv files
 .env
 appsettings.Development.json
-
+migrateProd.sh
 # User-specific files
 *.rsuser
 *.suo

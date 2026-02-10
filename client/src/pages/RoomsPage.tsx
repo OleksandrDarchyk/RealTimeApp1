@@ -7,43 +7,112 @@ import { realtimeClient } from "../clients";
 export default function RoomsPage() {
     const [rooms, setRooms] = useState<RoomDto[]>([]);
     const [roomId, setRoomId] = useState("room1");
+    const [loading, setLoading] = useState(true);
     const navigate = useNavigate();
 
     useEffect(() => {
-        realtimeClient.getRooms().then(setRooms);
+        realtimeClient
+            .getRooms()
+            .then(setRooms)
+            .finally(() => setLoading(false));
     }, []);
 
     return (
-        <div style={{ display: "grid", gap: 16, padding: 16 }}>
-            <div>
-                <h3>Auth</h3>
-                <Login />
+        <div className="min-h-screen bg-base-200">
+            <div className="navbar bg-base-100 shadow-sm">
+                <div className="flex-1">
+                    <div className="font-bold text-lg">Realtime Chat</div>
+                </div>
+                <div className="text-xs opacity-70">Public reads • Auth writes</div>
             </div>
 
-            <div>
-                <h3>Create room</h3>
-                <input value={roomId} onChange={(e) => setRoomId(e.target.value)} />
-                <button
-                    onClick={async () => {
-                        if (!roomId.trim()) return;
-                        await realtimeClient.createRoom({ roomId });
-                        // перезавантажити список
-                        const r = await realtimeClient.getRooms();
-                        setRooms(r);
-                    }}
-                >
-                    Create
-                </button>
-            </div>
+            <div className="p-4">
+                <div className="grid grid-cols-1 lg:grid-cols-[420px_1fr] gap-4">
+                    <div className="card bg-base-100 shadow">
+                        <div className="card-body gap-4">
+                            <div>
+                                <div className="font-bold mb-2">Auth</div>
+                                <Login />
+                            </div>
 
-            <div>
-                <h3>Rooms</h3>
-                {rooms.map((r) => (
-                    <div key={r.id} style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                        <div style={{ minWidth: 220 }}>{r.id}</div>
-                        <button onClick={() => navigate(`/rooms/${r.id}`)}>Join</button>
+                            <div className="divider my-0"></div>
+
+                            <div>
+                                <div className="font-bold mb-2">Create room</div>
+                                <div className="flex gap-2">
+                                    <input
+                                        className="input input-bordered w-full"
+                                        value={roomId}
+                                        onChange={(e) => setRoomId(e.target.value)}
+                                        placeholder="room id (e.g. room1)"
+                                    />
+                                    <button
+                                        className="btn btn-primary"
+                                        onClick={async () => {
+                                            if (!roomId.trim()) return;
+                                            await realtimeClient.createRoom({ roomId });
+                                            const r = await realtimeClient.getRooms();
+                                            setRooms(r);
+                                        }}
+                                    >
+                                        Create
+                                    </button>
+                                </div>
+                                <div className="text-xs opacity-70 mt-2">
+                                    Anyone can join and read. Login is required to send messages.
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                ))}
+
+                    <div className="card bg-base-100 shadow">
+                        <div className="card-body">
+                            <div className="flex items-center justify-between">
+                                <div className="font-bold text-lg">Rooms</div>
+                                <div className="badge badge-neutral">{rooms.length}</div>
+                            </div>
+
+                            <div className="divider my-2"></div>
+
+                            {loading ? (
+                                <div className="flex items-center gap-3">
+                                    <span className="loading loading-spinner"></span>
+                                    <span className="text-sm opacity-70">Loading rooms...</span>
+                                </div>
+                            ) : rooms.length === 0 ? (
+                                <div className="alert">
+                                    <span>No rooms yet. Create one on the left.</span>
+                                </div>
+                            ) : (
+                                <div className="overflow-x-auto">
+                                    <table className="table">
+                                        <thead>
+                                        <tr>
+                                            <th>Room</th>
+                                            <th className="w-32"></th>
+                                        </tr>
+                                        </thead>
+                                        <tbody>
+                                        {rooms.map((r) => (
+                                            <tr key={r.id}>
+                                                <td className="font-mono">{r.id}</td>
+                                                <td>
+                                                    <button
+                                                        className="btn btn-sm btn-outline"
+                                                        onClick={() => navigate(`/rooms/${r.id}`)}
+                                                    >
+                                                        Join
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     );

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import toast from "react-hot-toast";
 import { useStream } from "../useStream";
 import { realtimeClient } from "../clients";
 
@@ -65,7 +66,7 @@ export default function RoomPage() {
             "direct",
             "PokeResponse",
             (dto) => {
-                alert(dto.message);
+                toast(dto.message);
             }
         );
 
@@ -99,9 +100,7 @@ export default function RoomPage() {
 
                 <div className="text-xs opacity-70">
                     connectionId:{" "}
-                    <span className="font-mono">
-            {stream.connectionId ?? "(connecting...)"}
-          </span>
+                    <span className="font-mono">{stream.connectionId ?? "(connecting...)"}</span>
                 </div>
             </div>
 
@@ -137,8 +136,12 @@ export default function RoomPage() {
                                 onChange={(e) => setText(e.target.value)}
                                 onKeyDown={async (e) => {
                                     if (e.key === "Enter" && text.trim()) {
-                                        await realtimeClient.sendMessage(roomId, { content: text });
-                                        setText("");
+                                        try {
+                                            await realtimeClient.sendMessage(roomId, { content: text });
+                                            setText("");
+                                        } catch (e: any) {
+                                            toast.error(e?.message ?? "Failed to send message");
+                                        }
                                     }
                                 }}
                             />
@@ -146,8 +149,12 @@ export default function RoomPage() {
                                 className="btn btn-primary"
                                 onClick={async () => {
                                     if (!text.trim()) return;
-                                    await realtimeClient.sendMessage(roomId, { content: text });
-                                    setText("");
+                                    try {
+                                        await realtimeClient.sendMessage(roomId, { content: text });
+                                        setText("");
+                                    } catch (e: any) {
+                                        toast.error(e?.message ?? "Failed to send message");
+                                    }
                                 }}
                             >
                                 Send
@@ -165,8 +172,12 @@ export default function RoomPage() {
                                 className="btn btn-secondary"
                                 onClick={async () => {
                                     if (!targetConnId.trim()) return;
-                                    await realtimeClient.poke({ targetConnectionId: targetConnId });
-                                    alert("poke sent");
+                                    try {
+                                        await realtimeClient.poke({ targetConnectionId: targetConnId });
+                                        toast.success("Poke sent");
+                                    } catch (e: any) {
+                                        toast.error(e?.message ?? "Failed to poke");
+                                    }
                                 }}
                             >
                                 Poke
@@ -175,10 +186,12 @@ export default function RoomPage() {
                                 className="btn btn-outline"
                                 onClick={async () => {
                                     if (!stream.connectionId) return;
-                                    await realtimeClient.leaveRoom(roomId, {
-                                        connectionId: stream.connectionId,
-                                    });
-                                    navigate("/");
+                                    try {
+                                        await realtimeClient.leaveRoom(roomId, { connectionId: stream.connectionId });
+                                        navigate("/");
+                                    } catch (e: any) {
+                                        toast.error(e?.message ?? "Failed to leave room");
+                                    }
                                 }}
                             >
                                 Leave

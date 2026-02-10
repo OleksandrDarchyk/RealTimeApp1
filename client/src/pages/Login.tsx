@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import toast from "react-hot-toast";
 import type { LoginRequest } from "../generated-ts-client";
 import { authClient } from "../clients";
 
@@ -53,6 +54,9 @@ export default function Login() {
                                 const t = r.token ?? "";
                                 localStorage.setItem("jwt", t);
                                 setToken(t);
+                                toast.success("Logged in");
+                            } catch (e: any) {
+                                toast.error(e?.message ?? "Login failed");
                             } finally {
                                 setBusy(null);
                             }
@@ -78,6 +82,9 @@ export default function Login() {
                                 const t = r.token ?? "";
                                 localStorage.setItem("jwt", t);
                                 setToken(t);
+                                toast.success("Registered");
+                            } catch (e: any) {
+                                toast.error(e?.message ?? "Register failed");
                             } finally {
                                 setBusy(null);
                             }
@@ -99,6 +106,7 @@ export default function Login() {
                         onClick={() => {
                             localStorage.removeItem("jwt");
                             setToken(null);
+                            toast("Logged out");
                         }}
                     >
                         Logout

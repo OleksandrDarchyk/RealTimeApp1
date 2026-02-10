@@ -1,14 +1,16 @@
-import { createRoot } from 'react-dom/client'
-import './index.css'
-import App from './App.tsx'
-import { StreamProvider } from "./useStream.tsx";
-import { API_BASE_URL } from "./config";
+import { createRoot } from "react-dom/client";
+import Routes from "./Routes";
+import { StreamProvider } from "./useStream";
+import { BASE_URL } from "./utils/BASE_URL";
+import "./styles.css";
 
-createRoot(document.getElementById('root')!).render(
-    <StreamProvider config={{
-        urlForStreamEndpoint: `${API_BASE_URL}/connect`,
-        connectEvent: "ConnectionResponse",
-    }}>
-        <App />
-    </StreamProvider>,
+createRoot(document.getElementById("root")!).render(
+    <StreamProvider
+        config={{
+            urlForStreamEndpoint: `${BASE_URL}/connect`,
+            connectEvent: "ConnectionResponse",
+        }}
+    >
+        <Routes />
+    </StreamProvider>
 );
